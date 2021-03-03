@@ -1,15 +1,21 @@
 package com.university.ip.ui.main
 
+import MainContract
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
+import android.provider.MediaStore
 import android.view.View
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.university.ip.R
 import com.university.ip.model.Photo
+import com.university.ip.ui.editor.EditorActivity
 
 
 class MainActivity : AppCompatActivity(), MainContract.View, View.OnClickListener,
@@ -43,8 +49,8 @@ class MainActivity : AppCompatActivity(), MainContract.View, View.OnClickListene
         adapter = PhotosDisplayAdapter(appContext(), this)
         photosRecycler.adapter = adapter
 
-//        photoList = presenter.getAllPicturesFromFolder(appContext()) - this is where we initialize the photoList
-        photoList = listOf()
+        photoList =
+            presenter.getAllPicturesFromFolder(appContext()) // - this is where we initialize the photoList
         adapter.setMediaList(photoList!!)
 
         toggleVisibility()
@@ -60,13 +66,52 @@ class MainActivity : AppCompatActivity(), MainContract.View, View.OnClickListene
         }
     }
 
+    //activity result after
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (resultCode != Activity.RESULT_CANCELED) {
+            val intent = Intent(this, EditorActivity::class.java).apply {
+                this.putExtra(INTENT_EXTRAS, data!!.extras)
+                this.putExtra(REQUEST_CODE, requestCode)
+                this.putExtra(RESULT_CODE, resultCode)
+                this.data = data.data
+            }
+            startActivity(intent)
+        }
+    }
+
+    //function for selecting camera or image collection
+    private fun selectImage(context: Context) {
+        val options = arrayOf("Camera", "Gallery", "Cancel")
+
+        val builder = AlertDialog.Builder(context).setItems(options) { dialog, item ->
+            when (item) {
+                0 -> {
+                    val takePicture = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+                    startActivityForResult(takePicture, 0)
+
+                }
+                1 -> {
+                    val pickPhoto = Intent(
+                        Intent.ACTION_PICK,
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                    )
+                    startActivityForResult(pickPhoto, 1)
+
+                }
+                3 -> dialog.dismiss()
+            }
+        }
+        builder.create().show()
+    }
+
     override fun onItemClick(photo: Photo) {
         println(photo.path)
         println(photo.name)
     }
 
     override fun onClick(v: View?) {
-        makeToast("Ana are mere", appContext())
+        //image selection dialog
+        selectImage(this)
     }
 
     override fun onDestroy() {
@@ -74,4 +119,9 @@ class MainActivity : AppCompatActivity(), MainContract.View, View.OnClickListene
         presenter.unbindView()
     }
 
+    companion object {
+        const val INTENT_EXTRAS: String = "INTENT_EXTRAS"
+        const val REQUEST_CODE: String = "REQUEST_CODE"
+        const val RESULT_CODE: String = "RESULT_CODE"
+    }
 }
