@@ -16,6 +16,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.university.ip.R
 import com.university.ip.model.Photo
 import com.university.ip.ui.editor.EditorActivity
+import com.university.ip.ui.viewer.ViewerActivity
 
 
 class MainActivity : AppCompatActivity(), MainContract.View, View.OnClickListener,
@@ -107,6 +108,11 @@ class MainActivity : AppCompatActivity(), MainContract.View, View.OnClickListene
     override fun onItemClick(photo: Photo) {
         println(photo.path)
         println(photo.name)
+        startActivity(
+            Intent(appContext(), ViewerActivity::class.java)
+                .putExtra(PHOTO_NAME, photo.name)
+                .putExtra(PHOTO_PATH, photo.path)
+        )
     }
 
     override fun onClick(v: View?) {
@@ -123,5 +129,7 @@ class MainActivity : AppCompatActivity(), MainContract.View, View.OnClickListene
         const val INTENT_EXTRAS: String = "INTENT_EXTRAS"
         const val REQUEST_CODE: String = "REQUEST_CODE"
         const val RESULT_CODE: String = "RESULT_CODE"
+        const val PHOTO_PATH: String = "PHOTO_PATH"
+        const val PHOTO_NAME: String = "PHOTO_NAME"
     }
 }

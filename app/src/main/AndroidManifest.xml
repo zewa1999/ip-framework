@@ -46,6 +46,9 @@
         <activity
             android:name=".ui.editor.EditorActivity"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+        <activity
+            android:name=".ui.viewer.ViewerActivity"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
 
     </application>
 
