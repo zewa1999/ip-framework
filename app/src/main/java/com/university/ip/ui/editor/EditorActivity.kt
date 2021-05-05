@@ -11,11 +11,11 @@ import android.util.Log
 import android.view.View
 import android.widget.ImageView
 import android.widget.SeekBar
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.university.ip.R
+import com.university.ip.repository.FiltersUtils
 import com.university.ip.ui.main.MainActivity
 import com.university.ip.util.files.FileSaver.Companion.IMAGE_MIME_TYPE
 import com.university.ip.util.files.FileSaverLegacy
@@ -28,15 +28,24 @@ class EditorActivity : AppCompatActivity(), EditorContract.View, View.OnClickLis
     private val TAG = "EditorActivity"
 
     private lateinit var backButton: ImageView
-    private lateinit var saveButton: TextView
+    private lateinit var saveButton: ImageView
+    private lateinit var undoButton: ImageView
+    private lateinit var redoButton: ImageView
+    private lateinit var resetButton: ImageView
+
     private lateinit var imageView: ImageView
     private lateinit var filterList: RecyclerView
-    private lateinit var seekBar: SeekBar
+    private lateinit var seekBar1: SeekBar
+    private lateinit var seekBar2: SeekBar
+    private lateinit var seekBar3: SeekBar
+    private lateinit var filterMapper: FiltersUtils
 
     private lateinit var adapter: FiltersAdapter
 
     private lateinit var fileSaver: FileSaverLegacy
-    private lateinit var bitmap: Bitmap
+    private lateinit var temporaryBitmap: Bitmap
+    private lateinit var finalBitmap: Bitmap
+    private lateinit var originalBitmap: Bitmap
     private lateinit var selectedFilter: String
     private lateinit var presenter: EditorPresenter
 
@@ -49,15 +58,26 @@ class EditorActivity : AppCompatActivity(), EditorContract.View, View.OnClickLis
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_editor)
 
-        //list initialization
         val layoutManager = LinearLayoutManager(appContext(), LinearLayoutManager.HORIZONTAL, false)
         filterList = findViewById(R.id.filters_list)
         filterList.layoutManager = layoutManager
         adapter = FiltersAdapter(appContext(), this)
         adapter.setMediaList(FILTERS_ARRAY);
         filterList.adapter = adapter
+        filterMapper = FiltersUtils()
 
-        seekBar = findViewById(R.id.seek_bar_editor)
+        seekBar1 = findViewById(R.id.seek_bar_editor1)
+        seekBar2 = findViewById(R.id.seek_bar_editor2)
+        seekBar3 = findViewById(R.id.seek_bar_editor3)
+
+        undoButton = findViewById(R.id.undo_button)
+        undoButton.setOnClickListener(this)
+
+        redoButton = findViewById(R.id.redo_button)
+        redoButton.setOnClickListener(this)
+
+        resetButton = findViewById(R.id.reset_button)
+        resetButton.setOnClickListener(this)
 
         backButton = findViewById(R.id.back_editor)
         backButton.setOnClickListener(this)
@@ -69,7 +89,6 @@ class EditorActivity : AppCompatActivity(), EditorContract.View, View.OnClickLis
         saveButton.setOnClickListener(this)
         presenter = EditorPresenter()
         presenter.bindView(this)
-        //image load
         loadImage()
         openCvInit()
 
@@ -96,7 +115,7 @@ class EditorActivity : AppCompatActivity(), EditorContract.View, View.OnClickLis
             when (requestCode) {
                 0 -> if (resultCode == Activity.RESULT_OK && intent != null) {
                     val selectedImage = data.get("data") as Bitmap
-                    bitmap = selectedImage
+                    temporaryBitmap = selectedImage
                     imageView.setImageBitmap(selectedImage)
                 }
                 1 -> if (resultCode == Activity.RESULT_OK && intent != null) {
@@ -111,11 +130,13 @@ class EditorActivity : AppCompatActivity(), EditorContract.View, View.OnClickLis
 
                         val columnIndex = cursor.getColumnIndex(filePathColumn[0])
                         val picturePath = cursor.getString(columnIndex)
-                        bitmap = BitmapFactory.decodeFile(picturePath)
-                        imageView.setImageBitmap(bitmap)
+                        temporaryBitmap = BitmapFactory.decodeFile(picturePath)
+                        originalBitmap = temporaryBitmap
+                        finalBitmap = temporaryBitmap
+                        filterMapper.originalBitmap = finalBitmap
+                        imageView.setImageBitmap(temporaryBitmap)
                         cursor.close()
                     }
-
                 }
             }
         }
@@ -125,8 +146,10 @@ class EditorActivity : AppCompatActivity(), EditorContract.View, View.OnClickLis
         const val INTENT_EXTRAS: String = "INTENT_EXTRAS"
         const val REQUEST_CODE: String = "REQUEST_CODE"
         const val RESULT_CODE: String = "RESULT_CODE"
-        val FILTERS_ARRAY: List<String> = listOf("Brightness", "Contrast", "Another filter")
-        val FILTERS_SLIDER_ARRAY: List<String> = listOf("Brightness", "Contrast")
+        val FILTERS_ARRAY: List<String> = listOf("Brightness", "Contrast","Grayscale", "Sepia","Binary"," Median Blur","Gaussian Blur","High Pass Blur", "Unsharp Mask",
+                "Zoom","Flip Vertically","Flip Horizontally","Flip both", "Rotate Left","Rotate Right","Adaptive Binarization","Bilateral Filter","Rotate at any angle")
+        val FILTERS_SLIDER_ARRAY: List<String> = listOf("Brightness", "Contrast", "Binary"," Median Blur","Gaussian Blur", "Zoom", "Adaptive Binarization", "Bilateral Filter","RGB Contrast", "RGB Brightness"
+                ,"Rotate at any angle")
     }
 
     override fun onClick(v: View?) {
@@ -137,20 +160,94 @@ class EditorActivity : AppCompatActivity(), EditorContract.View, View.OnClickLis
             R.id.save_button -> {
                 val uri = fileSaver.getFileUri(IMAGE_MIME_TYPE) ?: return
                 appContext().contentResolver.openOutputStream(uri)?.use { stream ->
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream)
+                    finalBitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream)
                 }
                 startActivity(Intent(appContext(), MainActivity::class.java))
+            }
+            R.id.undo_button -> {
+                    val beforeFilter = filterMapper.undo(finalBitmap)
+                finalBitmap = beforeFilter
+                    setBitmap(beforeFilter)
+            }
+            R.id.redo_button -> {
+                filterMapper.addInUndo(finalBitmap)
+                val beforeFilter = filterMapper.redo(finalBitmap)
+                finalBitmap = beforeFilter
+                setBitmap(beforeFilter)
+            }
+            R.id.reset_button -> {
+                setBitmap(finalBitmap)
+                finalBitmap = originalBitmap
+                filterMapper.bitmapUndoStack.clear()
+                filterMapper.bitmapRedoStack.clear()
             }
         }
     }
 
     override fun onItemClick(filter: String) {
+        temporaryBitmap = finalBitmap
         selectedFilter = filter
+        seekBar1.visibility = View.GONE
+        seekBar2.visibility = View.GONE
+        seekBar3.visibility = View.GONE
+
         if (FILTERS_SLIDER_ARRAY.indexOf(selectedFilter) >= 0) {
-            seekBar.visibility = View.VISIBLE
-            seekBar.setOnSeekBarChangeListener(this)
+            seekBar1.visibility = View.VISIBLE
+
+            seekBar1.setOnSeekBarChangeListener(this)
         } else {
-            seekBar.visibility = View.GONE
+            seekBar1.visibility = View.GONE
+            seekBar2.visibility = View.GONE
+            seekBar3.visibility = View.GONE
+            when (FILTERS_ARRAY.indexOf(selectedFilter)) {
+                2 -> {
+                    filterMapper.addInUndo(finalBitmap)
+                    finalBitmap = presenter.grayScale(temporaryBitmap)
+                    return
+                }
+                3 -> {
+                    filterMapper.addInUndo(finalBitmap)
+                    finalBitmap = presenter.sepia(temporaryBitmap)
+                    return
+                }
+                7 -> {
+                    filterMapper.addInUndo(finalBitmap)
+                    finalBitmap = presenter.highPassFilter(temporaryBitmap)
+                    return
+                }
+                8 -> {
+                    filterMapper.addInUndo(finalBitmap)
+                    finalBitmap = presenter.unsharpMask(temporaryBitmap)
+                    return
+                }
+
+                10 -> {
+                    filterMapper.addInUndo(finalBitmap)
+                    finalBitmap = presenter.flipPicture(temporaryBitmap, 0)
+                    return
+                }
+                11 -> {
+                    filterMapper.addInUndo(finalBitmap)
+                    finalBitmap = presenter.flipPicture(temporaryBitmap, 1)
+                    return
+                }
+                12 -> {
+                    filterMapper.addInUndo(finalBitmap)
+                    finalBitmap = presenter.flipPicture(temporaryBitmap, -1)
+                    return
+                }
+                13 -> {
+                    filterMapper.addInUndo(finalBitmap)
+                    finalBitmap = presenter.rotatePicture(temporaryBitmap, 0)
+                    return
+                }
+                14 -> {
+                    filterMapper.addInUndo(finalBitmap)
+                    finalBitmap = presenter.rotatePicture(temporaryBitmap, 1)
+                    return
+                }
+                else -> return
+            }
         }
         println(FILTERS_SLIDER_ARRAY.indexOf(selectedFilter))
     }
@@ -158,18 +255,72 @@ class EditorActivity : AppCompatActivity(), EditorContract.View, View.OnClickLis
     override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
         println(progress)
         println(selectedFilter)
+        seekBar2.visibility = View.GONE
+        seekBar3.visibility = View.GONE
+        seekBar1.max = 255
+        seekBar2.max = 255
+        seekBar3.max = 255
+
         when (FILTERS_SLIDER_ARRAY.indexOf(selectedFilter)) {
             0 -> {
-                presenter.brightness(bitmap, progress)
+                finalBitmap = presenter.brightness(temporaryBitmap, progress)
+                filterMapper.addInUndo(finalBitmap)
                 return
             }
             1 -> {
-                presenter.contrast(bitmap, progress)
+                finalBitmap = presenter.contrast(temporaryBitmap, progress)
+                filterMapper.addInUndo(finalBitmap)
                 return
             }
-            else -> return
+            2->{
+                finalBitmap = presenter.binary(temporaryBitmap, progress)
+                filterMapper.addInUndo(finalBitmap)
+                return
+            }
+            3->{
+                finalBitmap = presenter.medianBlur(temporaryBitmap, progress)
+                filterMapper.addInUndo(finalBitmap)
+                return
+            }
+            4->{
+                seekBar1.visibility = View.VISIBLE
+                seekBar2.visibility = View.VISIBLE
+                finalBitmap = presenter.gaussianBlur(temporaryBitmap, progress, seekBar2.progress)
+                filterMapper.addInUndo(finalBitmap)
+                return
+            }
+            5->{
+                finalBitmap = presenter.zoom(temporaryBitmap, progress)
+                filterMapper.addInUndo(finalBitmap)
+                return
+            }
+            6->{
+                finalBitmap = presenter.adaptiveBinary(temporaryBitmap, progress)
+                filterMapper.addInUndo(finalBitmap)
+                return
+            }
+            7->{
+                seekBar1.visibility = View.VISIBLE
+                finalBitmap = presenter.bilateralFilter(temporaryBitmap, seekBar1.progress)
+                filterMapper.addInUndo(finalBitmap)
+                return
+            }
+            10->{
+                seekBar1.visibility = View.VISIBLE
+                seekBar2.visibility = View.VISIBLE
+                seekBar3.visibility = View.VISIBLE
+                finalBitmap = presenter.rotateAtAnyDegree(temporaryBitmap, seekBar1.progress)
+                filterMapper.addInUndo(finalBitmap)
+                return
+            }
+            else ->
+            {
+                seekBar1.visibility = View.GONE
+                seekBar2.visibility = View.GONE
+                seekBar3.visibility = View.GONE
+                return
+            }
         }
-
     }
 
     override fun onStartTrackingTouch(seekBar: SeekBar) {}

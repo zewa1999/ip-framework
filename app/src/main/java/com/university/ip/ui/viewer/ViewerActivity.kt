@@ -11,13 +11,13 @@ import com.github.chrisbanes.photoview.PhotoView
 import com.university.ip.R
 import com.university.ip.model.Photo
 import com.university.ip.ui.main.MainActivity
+import com.university.ip.ui.main.MainPresenter
 
 
 class ViewerActivity : AppCompatActivity(), ViewerContract.View, View.OnClickListener {
 
     override fun appContext(): Context = applicationContext
 
-    private lateinit var presenter: ViewerPresenter
     private lateinit var imageView: PhotoView
     private lateinit var backButton: ImageView
     private lateinit var photo: Photo
@@ -41,11 +41,6 @@ class ViewerActivity : AppCompatActivity(), ViewerContract.View, View.OnClickLis
 
     override fun onClick(v: View?) {
         startActivity(Intent(appContext(), MainActivity::class.java))
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        presenter.unbindView()
     }
 
     companion object {

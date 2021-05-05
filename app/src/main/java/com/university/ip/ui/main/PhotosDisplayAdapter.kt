@@ -15,7 +15,6 @@ import com.university.ip.model.Photo
 class PhotosDisplayAdapter(context: Context, val itemClickListener: ItemClickListener) :
     RecyclerView.Adapter<PhotosDisplayAdapter.ViewHolder>() {
 
-    //    var selections: MutableList<Photo> = mutableListOf()
     var selectMedia: (photo: Photo, Int) -> Unit =
         { photo, _ -> print(photo.toString()) }
     private val context = context
